@@ -1,0 +1,144 @@
+/* ============================================================================
+   OPSPHERE game stylesheet — follows the OPSPHERE Game Branding Guidelines.
+   §3 brand token block is reproduced verbatim below (authoritative), then a
+   thin alias layer maps this game's component names onto those brand tokens so
+   components reference tokens, never raw hexes (§9.4).
+   ============================================================================ */
+
+:root {
+  /* Brand primary — the exact OPSPHERE brand purple */
+  --primary: #4F24B2;
+  --primary-hover: #5f30c9;
+
+  /* Dark HUD surfaces (navy family) */
+  --void:    #0a0714;
+  --bg:      #16122c;
+  --bg-glow: #34265f;
+  --panel:   #17122e;
+  --panel-2: #1f1846;
+  --line:    #302655;
+
+  /* Accent tints */
+  --violet:   #7c4dff;
+  --violet-2: #9d7bff;
+  --cyan:     #35d0ff;
+
+  /* Functional state colours (meaning-only) */
+  --good: #3fe08f;
+  --warn: #ffb23e;
+  --bad:  #ff4d6d;
+
+  /* Text */
+  --ink:     #f0edff;
+  --ink-dim: #9a91c4;
+
+  /* ---- this game's semantic aliases -> brand tokens ---- */
+  --base:    var(--bg);        /* dark page base */
+  --text:    var(--ink);       /* primary text  */
+  --muted:   var(--ink-dim);   /* secondary text */
+  --buzz:    var(--primary);   /* buzz = primary CTA (purple) */
+  --buzz-dk: #34176f;          /* pressed shadow for the buzz button */
+  --go:      var(--good);
+  --stop:    var(--bad);
+  --amber:   var(--warn);      /* caution / leader accent */
+  --radius:  16px;
+  --header-h: 56px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@500;700&family=Inter:wght@400;500;600&display=swap');
+
+html, body {
+  min-height: 100%;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, var(--bg-glow), transparent 60%),
+    var(--base);
+  color: var(--text);
+  font-family: var(--font-body), 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* faint club-emblem watermark on every screen (§5). Uses the real asset once
+   dropped into public/logo.png; simply shows nothing until then. */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: 0;
+  background: url('/logo.png') center 58% / min(52vw, 560px) no-repeat;
+  opacity: 0.04; pointer-events: none;
+}
+#app { position: relative; z-index: 1; }
+
+.display { font-family: var(--font-display), 'Chakra Petch', system-ui, sans-serif; }
+.mono    { font-family: var(--font-mono), 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+/* ---- fixed brand header (§5): logo+wordmark · subtitle · institution ---- */
+.opsbar {
+  position: fixed; top: 0; left: 0; right: 0; height: var(--header-h); z-index: 20;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 0 16px; background: var(--void); border-bottom: 1px solid var(--line);
+}
+.opsbar .left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.opsbar .logo { height: 34px; width: auto; display: block; }
+.opsbar .wordmark { font-family: var(--font-display), 'Chakra Petch', sans-serif; font-weight: 700; letter-spacing: .04em; font-size: 17px; }
+.opsbar .subtitle { color: var(--ink-dim); font-size: 14px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opsbar .chip { background: #f3f1fb; border-radius: 8px; padding: 4px 8px; display: flex; align-items: center; }
+.opsbar .chip img { height: 24px; width: auto; display: block; }
+.opsbar .chip .fallback { color: #241033; font-weight: 700; font-size: 12px; font-family: var(--font-display), sans-serif; }
+
+/* ---- mandatory developer credit footer (§6) ---- */
+.opscredit {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+  text-align: center; font-size: 11px; color: var(--ink-dim);
+  padding: 5px 8px; background: linear-gradient(to top, var(--void), transparent);
+  pointer-events: none;
+}
+
+/* ---- layout shells (offset for fixed header + footer) ---- */
+.screen {
+  min-height: 100dvh; display: flex; flex-direction: column;
+  padding: calc(var(--header-h) + 18px) 20px 40px; max-width: 720px; margin: 0 auto;
+}
+.stage {
+  min-height: 100dvh; display: flex; flex-direction: column;
+  padding: calc(var(--header-h) + 2vh) 4vw 44px;
+}
+.brandbar { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 14px; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 600; color: var(--text); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+
+/* ---- panels & buttons (§7) ---- */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+
+/* default = secondary "ghost": transparent, --line border, brightens to primary */
+.btn {
+  font: inherit; font-weight: 600; color: var(--text);
+  background: transparent; border: 1px solid var(--line);
+  border-radius: 12px; padding: 13px 18px; cursor: pointer;
+  transition: transform .05s ease, background .15s ease, border-color .15s ease, opacity .15s ease;
+}
+.btn:hover { border-color: var(--primary); background: rgba(124,77,255,.10); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+/* primary action = solid brand purple, white text */
+.btn-primary, .btn-amber { background: var(--primary); color: #fff; border-color: transparent; }
+.btn-primary:hover, .btn-amber:hover { background: var(--primary-hover); border-color: transparent; }
+.btn-go   { background: var(--good); color: #04231a; border-color: transparent; }
+.btn-go:hover { background: var(--good); border-color: transparent; opacity: .9; }
+.btn-stop { background: var(--bad); color: #2a0009; border-color: transparent; }
+.btn-stop:hover { background: var(--bad); border-color: transparent; opacity: .9; }
+.btn-block { width: 100%; }
+
+.input {
+  font: inherit; width: 100%; color: var(--text);
+  background: var(--void); border: 1px solid var(--line);
+  border-radius: 12px; padding: 13px 15px;
+}
+.input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+.field-label { display: block; font-size: 13px; color: var(--muted); margin: 0 0 7px; }
+.err { color: var(--bad); font-size: 14px; }
+.center { text-align: center; }
+.grow { flex: 1; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
