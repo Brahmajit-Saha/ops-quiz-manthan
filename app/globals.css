@@ -65,8 +65,8 @@ html, body {
 body::before {
   content: "";
   position: fixed; inset: 0; z-index: 0;
-  background: url('/logo.png') center 58% / min(760px, 84vw) no-repeat;
-  opacity: 0.18; filter: brightness(1.55) saturate(1.1); pointer-events: none;
+  background: url('/logo.png') center / min(760px, 84vw) no-repeat;
+  opacity: 0.22; filter: brightness(1.55) saturate(1.1); pointer-events: none;
 }
 #app { position: relative; z-index: 1; }
 
