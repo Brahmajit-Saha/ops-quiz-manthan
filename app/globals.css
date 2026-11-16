@@ -8,20 +8,21 @@
 :root {
   /* Brand primary — the exact OPSPHERE brand purple */
   --primary: #4F24B2;
-  --primary-hover: #5f30c9;
+  --primary-hover: #6234C9;
 
-  /* Dark HUD surfaces (navy family) */
-  --void:    #0a0714;
-  --bg:      #16122c;
-  --bg-glow: #34265f;
-  --panel:   #17122e;
-  --panel-2: #1f1846;
-  --line:    #302655;
+  /* Dark HUD surfaces — OPSPHERE brand navy #1C0B55 family */
+  --navy:    #1C0B55;          /* brand navy (exact) */
+  --void:    #0D0430;
+  --bg:      #150842;
+  --bg-glow: #3B1F96;
+  --panel:   #1C0B55;
+  --panel-2: #271272;
+  --line:    #3D2C8A;
 
   /* Accent tints */
-  --violet:   #7c4dff;
-  --violet-2: #9d7bff;
-  --cyan:     #35d0ff;
+  --violet:   #8F6BFF;
+  --violet-2: #B9A6FF;
+  --cyan:     #C4B5FD;          /* soft lavender highlight (name kept for compatibility) */
 
   /* Functional state colours (meaning-only) */
   --good: #3fe08f;
@@ -29,20 +30,20 @@
   --bad:  #ff4d6d;
 
   /* Text */
-  --ink:     #f0edff;
-  --ink-dim: #9a91c4;
+  --ink:     #F3F0FF;
+  --ink-dim: #A9A0D6;
 
   /* ---- this game's semantic aliases -> brand tokens ---- */
   --base:    var(--bg);        /* dark page base */
   --text:    var(--ink);       /* primary text  */
   --muted:   var(--ink-dim);   /* secondary text */
   --buzz:    var(--primary);   /* buzz = primary CTA (purple) */
-  --buzz-dk: #34176f;          /* pressed shadow for the buzz button */
+  --buzz-dk: #2F1569;          /* pressed shadow for the buzz button */
   --go:      var(--good);
   --stop:    var(--bad);
   --amber:   var(--warn);      /* caution / leader accent */
   --radius:  16px;
-  --header-h: 56px;
+  --header-h: 64px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -64,8 +65,8 @@ html, body {
 body::before {
   content: "";
   position: fixed; inset: 0; z-index: 0;
-  background: url('/logo.png') center 58% / min(52vw, 560px) no-repeat;
-  opacity: 0.04; pointer-events: none;
+  background: url('/logo.png') center 58% / min(760px, 84vw) no-repeat;
+  opacity: 0.18; filter: brightness(1.55) saturate(1.1); pointer-events: none;
 }
 #app { position: relative; z-index: 1; }
 
@@ -79,11 +80,12 @@ body::before {
   padding: 0 16px; background: var(--void); border-bottom: 1px solid var(--line);
 }
 .opsbar .left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.opsbar .logo { height: 34px; width: auto; display: block; }
+.opsbar .logochip { background: #F3F1FB; border-radius: 10px; padding: 3px 9px; display: flex; align-items: center; }
+.opsbar .logo { height: 46px; width: auto; display: block; }
 .opsbar .wordmark { font-family: var(--font-display), 'Chakra Petch', sans-serif; font-weight: 700; letter-spacing: .04em; font-size: 17px; }
 .opsbar .subtitle { color: var(--ink-dim); font-size: 14px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.opsbar .chip { background: #f3f1fb; border-radius: 8px; padding: 4px 8px; display: flex; align-items: center; }
-.opsbar .chip img { height: 24px; width: auto; display: block; }
+.opsbar .chip { background: #F3F1FB; border-radius: 10px; padding: 4px 10px; display: flex; align-items: center; }
+.opsbar .chip img { height: 32px; width: auto; display: block; }
 .opsbar .chip .fallback { color: #241033; font-weight: 700; font-size: 12px; font-family: var(--font-display), sans-serif; }
 
 /* ---- mandatory developer credit footer (§6) ---- */
@@ -117,7 +119,7 @@ body::before {
   border-radius: 12px; padding: 13px 18px; cursor: pointer;
   transition: transform .05s ease, background .15s ease, border-color .15s ease, opacity .15s ease;
 }
-.btn:hover { border-color: var(--primary); background: rgba(124,77,255,.10); }
+.btn:hover { border-color: var(--primary); background: rgba(143,107,255,.14); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 /* primary action = solid brand purple, white text */

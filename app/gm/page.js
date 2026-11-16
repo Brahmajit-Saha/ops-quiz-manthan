@@ -156,7 +156,7 @@ export default function GameMaster() {
               <div key={r.team_id} className="panel" style={{
                 display: 'flex', alignItems: 'center', gap: 18, padding: 18,
                 borderColor: isUp ? 'var(--amber)' : 'var(--line)',
-                borderWidth: isUp ? 2 : 1, background: isUp ? '#211d33' : 'var(--panel)',
+                borderWidth: isUp ? 2 : 1, background: isUp ? 'var(--panel-2)' : 'var(--panel)',
                 opacity: r.rank < ctrl.current_attempt_rank ? 0.55 : 1
               }}>
                 <div className="mono" style={{ fontSize: 34, width: 42, color: 'var(--amber)' }}>{r.rank}</div>
