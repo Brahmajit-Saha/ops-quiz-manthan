@@ -11,7 +11,7 @@ export default function Header() {
     <header className="opsbar">
       <div className="left">
         {logoOk
-          ? <img className="logo" src="/logo.png" alt="OPSPHERE" onError={() => setLogoOk(false)} />
+          ? <div className="logochip"><img className="logo" src="/logo.png" alt="OPSPHERE" onError={() => setLogoOk(false)} /></div>
           : null}
         <span className="wordmark">OPSPHERE</span>
       </div>
