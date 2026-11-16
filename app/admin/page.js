@@ -34,7 +34,7 @@ export default function Admin() {
     const ch = supabase.channel('gc-admin')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'game_control' },
         p => { setCtrl(p.new); loadBoard(); }).subscribe();
-    const poll = setInterval(loadBoard, 2000);       // scores aren't realtime-pushed; poll
+    const poll = setInterval(() => { loadBoard(); loadQuestions(); }, 3000);       // scores aren't realtime-pushed; poll
     return () => { supabase.removeChannel(ch); clearInterval(poll); };
   }, [ok, loadQuestions, loadBoard]);
 
@@ -63,13 +63,18 @@ export default function Admin() {
 
   async function saveDraft() {
     if (!draft.text.trim()) return;
-    if (editing) await rpc('update_question', { p_id: editing, p_text: draft.text, p_base: +draft.base, p_limit: +draft.limit, p_segment: draft.segment });
-    else await rpc('add_question', { p_text: draft.text, p_base: +draft.base, p_limit: +draft.limit, p_segment: draft.segment });
-    setDraft({ text: '', base: 10, limit: 10, segment: '' }); setEditing(null); loadQuestions();
+    try {
+      const res = editing
+        ? await rpc('update_question', { p_id: editing, p_text: draft.text, p_base: +draft.base, p_limit: +draft.limit, p_segment: draft.segment })
+        : await rpc('add_question', { p_text: draft.text, p_base: +draft.base, p_limit: +draft.limit, p_segment: draft.segment });
+      if (res && res.ok === false) { alert('Could not save: ' + (res.reason || 'unknown error')); return; }
+    } catch (e) { alert('Could not save the question: ' + (e.message || e)); return; }
+    setDraft({ text: '', base: 10, limit: 10, segment: '' }); setEditing(null);
+    await loadQuestions();
   }
   function editRow(q) { setEditing(q.id); setDraft({ text: q.question_text, base: q.base_points, limit: q.time_limit_seconds, segment: q.segment_name || '' }); }
-  async function delRow(q) { if (confirm('Delete this question?')) { await rpc('delete_question', { p_id: q.id }); loadQuestions(); } }
-  async function move(q, dir) { await rpc('move_question', { p_id: q.id, p_dir: dir }); loadQuestions(); }
+  async function delRow(q) { if (confirm('Delete this question?')) { try { await rpc('delete_question', { p_id: q.id }); } catch (e) { alert('Could not delete: ' + (e.message || e)); } await loadQuestions(); } }
+  async function move(q, dir) { try { await rpc('move_question', { p_id: q.id, p_dir: dir }); } catch (e) { alert('Could not move: ' + (e.message || e)); } await loadQuestions(); }
 
   const showingQ = ctrl?.show_questions_to_players !== false;
 
@@ -84,7 +89,7 @@ export default function Admin() {
       </div>
 
       {/* CONTROLS */}
-      <div className="panel" style={{ margin: '14px 0', display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+      <div className="panel admin-controls">
         <button className={'btn ' + (running ? 'btn-stop' : 'btn-go')} onClick={toggleStatus}>
           {running ? 'Pause game' : 'Resume game'}
         </button>
@@ -96,7 +101,7 @@ export default function Admin() {
         <button className="btn btn-stop" onClick={restart} style={{ marginLeft: 'auto' }}>Restart game</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.3fr)', gap: 14 }}>
+      <div className="admin-grid">
         {/* SCOREBOARD */}
         <div className="panel">
           <h2 className="display" style={{ fontSize: 20, marginBottom: 12 }}>Live scorecard</h2>
@@ -122,7 +127,7 @@ export default function Admin() {
             <div style={{ display: 'grid', gap: 8, marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--line)' }}>
               <input className="input" placeholder="Question text" value={draft.text}
                 onChange={e => setDraft({ ...draft, text: e.target.value })} />
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="qform-row">
                 <input className="input" type="number" style={{ width: 90 }} value={draft.base}
                   onChange={e => setDraft({ ...draft, base: e.target.value })} title="Base points" />
                 <select className="input" style={{ width: 90 }} value={draft.limit}
@@ -137,22 +142,22 @@ export default function Admin() {
             </div>
           )}
 
-          <div style={{ display: 'grid', gap: 6, maxHeight: 420, overflowY: 'auto' }}>
+          <div className="qlist">
             {questions.map((q, i) => (
-              <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, background: 'var(--base)', borderRadius: 10, border: '1px solid var(--line)' }}>
+              <div key={q.id} className="qrow">
                 <span className="mono" style={{ width: 22, color: 'var(--muted)', fontSize: 14 }}>{i + 1}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div className="qtext">
+                  <div className="qtitle">
                     {q.is_placeholder && <span style={{ color: 'var(--amber)' }}>[placeholder] </span>}{q.question_text}
                   </div>
                   <div style={{ color: 'var(--muted)', fontSize: 12 }}>{q.segment_name} · {q.time_limit_seconds}s · {q.base_points}pts</div>
                 </div>
-                {!running && <>
+                {!running && <div className="qactions">
                   <button className="btn" style={{ padding: '6px 9px' }} onClick={() => move(q, 'up')} disabled={i === 0} aria-label="Move up">&uarr;</button>
                   <button className="btn" style={{ padding: '6px 9px' }} onClick={() => move(q, 'down')} disabled={i === questions.length - 1} aria-label="Move down">&darr;</button>
                   <button className="btn" style={{ padding: '6px 9px' }} onClick={() => editRow(q)}>Edit</button>
                   <button className="btn" style={{ padding: '6px 9px' }} onClick={() => delRow(q)} aria-label="Delete">&times;</button>
-                </>}
+                </div>}
               </div>
             ))}
           </div>
