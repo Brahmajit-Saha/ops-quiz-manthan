@@ -11,6 +11,7 @@ export default function Admin() {
   const [questions, setQuestions] = useState([]);
   const [draft, setDraft] = useState({ text: '', base: 10, limit: 10, segment: '' });
   const [editing, setEditing] = useState(null);
+  const [loadErr, setLoadErr] = useState('');
 
   useEffect(() => {
     const raw = typeof window !== 'undefined' && localStorage.getItem('ops_identity');
@@ -20,7 +21,9 @@ export default function Admin() {
   }, [router]);
 
   const loadQuestions = useCallback(async () => {
-    const { data } = await supabase.from('questions').select('*').order('order_index');
+    const { data, error } = await supabase.from('questions').select('*').order('order_index');
+    if (error) { setLoadErr(error.message || String(error)); return; }   // keep the old list on error
+    setLoadErr('');
     setQuestions(data || []);
   }, []);
   const loadBoard = useCallback(async () => {
@@ -119,6 +122,7 @@ export default function Admin() {
         {/* QUESTION EDITOR */}
         <div className="panel">
           <h2 className="display" style={{ fontSize: 20, marginBottom: 4 }}>Questions ({questions.length})</h2>
+          {loadErr && <p style={{ color: 'var(--stop)', fontSize: 13, marginBottom: 10 }}>Could not load the question list: {loadErr}</p>}
           {running
             ? <p style={{ color: 'var(--amber)', fontSize: 13, marginBottom: 10 }}>Pause the game to add, edit, or reorder questions.</p>
             : <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 10 }}>Add, edit, and reorder freely. Timer must be 5 or 10.</p>}
