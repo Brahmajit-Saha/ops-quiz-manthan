@@ -144,3 +144,25 @@ body::before {
 .grow { flex: 1; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---- Admin panel layout (responsive) ---- */
+.admin-controls { margin: 14px 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.admin-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr); gap: 14px; }
+.qform-row { display: flex; gap: 8px; }
+.qlist { display: grid; gap: 6px; max-height: 420px; overflow-y: auto; }
+.qrow { display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--base); border-radius: 10px; border: 1px solid var(--line); }
+.qtext { flex: 1; min-width: 0; }
+.qtitle { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qactions { display: flex; gap: 6px; }
+@media (max-width: 760px) {
+  .admin-grid { grid-template-columns: 1fr; }
+  .admin-controls .btn { flex: 1 1 calc(50% - 10px); }
+  .admin-controls .btn-stop { margin-left: 0 !important; }
+  .qform-row { flex-wrap: wrap; }
+  .qform-row .input { flex: 1 1 90px; }
+  .qlist { max-height: none; }
+  .qrow { flex-wrap: wrap; }
+  .qtitle { white-space: normal; }
+  .qactions { width: 100%; justify-content: flex-end; }
+  .panel { padding: 14px; }
+}
