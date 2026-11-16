@@ -75,6 +75,7 @@ export default function Player() {
     try {
       const res = await rpc('submit_buzz', { p_team: me.team_id, p_question: question.id, p_client_t: t });
       if (!res?.ok && res?.reason === 'window_closed') setActed({ type: 'late' });
+      else if (res?.ok && res.reaction_time != null) setActed({ type: 'buzz', t: Number(res.reaction_time) }); // show the server-measured time
     } catch { /* keep optimistic lock; server is source of truth */ }
   }
 
