@@ -9,6 +9,7 @@ export default function Player() {
   const [ctrl, setCtrl] = useState(null);        // game_control row
   const [question, setQuestion] = useState(null); // current question row
   const [passesLeft, setPassesLeft] = useState(3);
+  const [eliminated, setEliminated] = useState(false);
   const [acted, setActed] = useState(null);       // {type:'buzz'|'pass', t?} for current Q
   const [now, setNow] = useState(Date.now());
   const actedForQ = useRef(null);                 // question_id we've already acted on
@@ -20,9 +21,13 @@ export default function Player() {
     const id = JSON.parse(raw);
     if (id.role !== 'player') { router.replace('/'); return; }
     setMe(id);
-    supabase.from('teams').select('passes_remaining').eq('id', id.team_id).single()
-      .then(({ data }) => data && setPassesLeft(data.passes_remaining));
+    refreshTeam(id.team_id);
   }, [router]);
+
+  async function refreshTeam(teamId) {
+    const { data } = await supabase.from('teams').select('passes_remaining, eliminated').eq('id', teamId).single();
+    if (data) { setPassesLeft(data.passes_remaining); setEliminated(!!data.eliminated); }
+  }
 
   // --- live game_control ---
   useEffect(() => {
@@ -41,6 +46,7 @@ export default function Player() {
 
   async function applyCtrl(gc) {
     setCtrl(gc);
+    try { const raw = localStorage.getItem('ops_identity'); if (raw) refreshTeam(JSON.parse(raw).team_id); } catch {}
     // new question? reset our per-question action state and fetch text
     if (gc.current_question_id && gc.current_question_id !== actedForQ.current?.qid) {
       actedForQ.current = { qid: gc.current_question_id };
@@ -94,6 +100,8 @@ export default function Player() {
 
   // ---------- render states ----------
   const waiting = !ctrl?.current_question_id || ctrl?.question_phase === 'idle' || ctrl?.status === 'setup';
+  const betweenRounds = ctrl?.round_state === 'between';
+  const gameOver = ctrl?.status === 'finished';
   const closed = ctrl?.question_phase && ['buzzing_closed','resolved','voided'].includes(ctrl.question_phase);
 
   return (
@@ -104,14 +112,25 @@ export default function Player() {
       </div>
 
       <div className="grow" style={{ display: 'flex', flexDirection: 'column', gap: 16, justifyContent: 'center' }}>
-        {waiting && (
-          <div className="panel center" style={{ padding: 34 }}>
-            <div className="display" style={{ fontSize: 22 }}>Get ready</div>
-            <p style={{ color: 'var(--muted)', marginTop: 8 }}>Waiting for the next question&hellip;</p>
+        {eliminated && (
+          <div className="panel center" style={{ padding: 34, borderColor: 'var(--stop)' }}>
+            <div className="display" style={{ fontSize: 26, color: 'var(--stop)' }}>Eliminated</div>
+            <p style={{ color: 'var(--muted)', marginTop: 10 }}>Your team is out of the game. Thanks for playing!</p>
           </div>
         )}
 
-        {!waiting && (
+        {!eliminated && waiting && (
+          <div className="panel center" style={{ padding: 34 }}>
+            <div className="display" style={{ fontSize: 22 }}>
+              {gameOver ? 'Game over' : betweenRounds ? 'Round complete' : 'Get ready'}
+            </div>
+            <p style={{ color: 'var(--muted)', marginTop: 8 }}>
+              {gameOver ? 'Thanks for playing!' : betweenRounds ? 'Waiting for the next round\u2026' : 'Waiting for the next question\u2026'}
+            </p>
+          </div>
+        )}
+
+        {!eliminated && !waiting && (
           <>
             {/* question */}
             <div className="panel">

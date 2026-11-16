@@ -591,3 +591,6 @@ insert into teams (team_number, login_email) values
 -- DONE. Expect green Success. Next: set your real role passwords with —
 --   update app_config set admin_password='…', gm_password='…', player_password='…' where id;
 -- ============================================================================
+--
+-- ROUNDS + ELIMINATION: after this script, also run database/patch-v4-rounds.sql.
+-- ============================================================================

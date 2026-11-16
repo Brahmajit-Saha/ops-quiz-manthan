@@ -7,7 +7,8 @@ export default function GameMaster() {
   const router = useRouter();
   const [ok, setOk] = useState(false);
   const [ctrl, setCtrl] = useState(null);
-  const [questions, setQuestions] = useState([]);   // ordered bank
+  const [questions, setQuestions] = useState([]);   // whole bank, in PLAY order (round, then question)
+  const [rounds, setRounds] = useState([]);
   const [currentQ, setCurrentQ] = useState(null);
   const [ranking, setRanking] = useState([]);
   const [now, setNow] = useState(Date.now());
@@ -18,9 +19,29 @@ export default function GameMaster() {
     if (!raw) { router.replace('/'); return; }
     if (JSON.parse(raw).role !== 'gm') { router.replace('/'); return; }
     setOk(true);
-    supabase.from('questions').select('*').order('order_index')
-      .then(({ data }) => setQuestions(data || []));
+    loadBank();
   }, [router]);
+
+  // Fetch rounds + questions and put questions in play order. Returns the ordered list.
+  async function loadBank() {
+    const [r, q] = await Promise.all([
+      supabase.from('rounds').select('*').order('round_number'),
+      supabase.from('questions').select('*').order('order_index'),
+    ]);
+    if (r.error || q.error) return questions;
+    const rs = r.data || [];
+    const ordered = rs.flatMap(rd => (q.data || []).filter(x => x.round_id === rd.id));
+    setRounds(rs); setQuestions(ordered);
+    return ordered;
+  }
+
+  // On the "round complete" screen, keep checking whether the Admin has confirmed eliminations.
+  useEffect(() => {
+    if (ctrl?.round_state !== 'between') return;
+    const t = setInterval(loadBank, 2500);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctrl?.round_state]);
 
   useEffect(() => {
     if (!ok) return;
@@ -67,14 +88,24 @@ export default function GameMaster() {
   if (!ok) return null;
 
   const idx = questions.findIndex(q => q.id === ctrl?.current_question_id);
-  const qNum = idx >= 0 ? idx + 1 : null;
-  const total = questions.length;
+  const curRound = rounds.find(r => r.id === (currentQ?.round_id ?? ctrl?.current_round_id));
+  const inRound = curRound ? questions.filter(q => q.round_id === curRound.id) : [];
+  const qNum = currentQ ? inRound.findIndex(q => q.id === currentQ.id) + 1 : null;   // number within the round
+  const total = inRound.length;
   const phase = ctrl?.question_phase;
+  const between = ctrl?.round_state === 'between' && ctrl?.status !== 'finished';
+  const nextRound = curRound ? rounds.find(r => r.round_number > curRound.round_number && questions.some(q => q.round_id === r.id)) : null;
+  const waitingForAdmin = !!(curRound?.eliminate_enabled && !curRound?.eliminations_applied);
 
   async function loadFirst() {
-    if (!questions.length) return;
+    const bank = await loadBank();
+    if (!bank.length) return;
     await rpc('set_status', { p_status: 'running' });
-    await rpc('set_current_question', { p_question: questions[0].id });
+    await rpc('set_current_question', { p_question: bank[0].id });
+  }
+  async function startNextRound() {
+    const res = await rpc('start_next_round');
+    if (res && res.ok === false) alert('Cannot start yet: ' + String(res.reason).replace(/_/g, ' '));
   }
   async function startQ() {
     closedFor.current = null;
@@ -87,24 +118,25 @@ export default function GameMaster() {
     await rpc('undo_mark', { p_question: ctrl.current_question_id, p_team: team });
   }
   async function next() {
-    if (idx >= 0 && idx + 1 < total) await rpc('set_current_question', { p_question: questions[idx + 1].id });
-    else await rpc('set_status', { p_status: 'finished' });
+    const nextQ = idx >= 0 ? questions[idx + 1] : null;
+    if (nextQ && nextQ.round_id === currentQ?.round_id) await rpc('set_current_question', { p_question: nextQ.id });
+    else await rpc('end_round');                       // last question of this round
   }
 
   return (
     <div className="stage">
       <div className="brandbar">
         <span className="brand"><span className="dot" /> Game Master</span>
-        <span>{qNum ? `Question ${qNum} of ${total}` : ctrl?.status === 'finished' ? 'Round complete' : 'Ready to start'}</span>
+        <span>{qNum ? `${curRound?.name} \u00b7 Question ${qNum} of ${total}` : ctrl?.status === 'finished' ? 'Game complete' : between ? `${curRound?.name} complete` : 'Ready to start'}</span>
       </div>
 
       {/* NO CURRENT QUESTION */}
-      {!ctrl?.current_question_id && ctrl?.status !== 'finished' && (
+      {!ctrl?.current_question_id && !between && ctrl?.status !== 'finished' && (
         <Center>
           <h1 className="display" style={{ fontSize: 'clamp(28px,4vw,52px)' }}>OPS in One Word</h1>
-          <p style={{ color: 'var(--muted)', margin: '10px 0 26px' }}>Round 2 · {total} questions loaded</p>
+          <p style={{ color: 'var(--muted)', margin: '10px 0 26px' }}>{rounds.length} round{rounds.length === 1 ? '' : 's'} · {questions.length} questions loaded</p>
           <button className="btn btn-amber" style={{ fontSize: 22, padding: '18px 34px' }}
-            onClick={loadFirst} disabled={!total}>Load first question</button>
+            onClick={loadFirst} disabled={!questions.length}>Load first question</button>
         </Center>
       )}
 
@@ -113,10 +145,38 @@ export default function GameMaster() {
           <p style={{ color: 'var(--muted)', marginTop: 12 }}>Final scores are on the Admin screen.</p></Center>
       )}
 
+      {/* ROUND COMPLETE */}
+      {between && (
+        <Center>
+          <div className="display" style={{ fontSize: 'clamp(30px,5vw,64px)' }}>{curRound?.name} complete</div>
+          {waitingForAdmin ? (
+            <p style={{ color: 'var(--muted)', margin: '14px 0 0', fontSize: 20 }}>
+              Waiting for the Admin to confirm eliminations&hellip;
+            </p>
+          ) : (
+            <p style={{ color: 'var(--muted)', margin: '14px 0 0', fontSize: 18 }}>
+              {curRound?.eliminate_enabled ? 'Eliminations confirmed.' : 'No elimination this round.'}
+            </p>
+          )}
+          {nextRound ? (
+            <button className="btn btn-go" style={{ marginTop: 26, fontSize: 24, padding: '18px 40px' }}
+              onClick={startNextRound} disabled={waitingForAdmin}>
+              Start {nextRound.name} &rarr;
+            </button>
+          ) : (
+            <button className="btn btn-amber" style={{ marginTop: 26, fontSize: 24, padding: '18px 40px' }}
+              onClick={() => rpc('set_status', { p_status: 'finished' })} disabled={waitingForAdmin}>
+              Finish game
+            </button>
+          )}
+        </Center>
+      )}
+
       {/* READY (room sees number only) */}
       {phase === 'idle' && ctrl?.current_question_id && (
         <Center>
           <div style={{ color: 'var(--muted)', fontSize: 20 }}>{currentQ?.segment_name}</div>
+          <div style={{ color: 'var(--muted)', fontSize: 18 }}>{curRound?.name}</div>
           <div className="display" style={{ fontSize: 'clamp(40px,8vw,96px)', margin: '6px 0 4px' }}>Question {qNum}</div>
           <div style={{ color: 'var(--muted)', marginBottom: 30 }}>
             {currentQ?.time_limit_seconds}s to buzz · up to {currentQ?.base_points} pts
@@ -147,7 +207,7 @@ export default function GameMaster() {
           {ranking.length === 0 && (
             <div className="panel center" style={{ padding: 30 }}>
               <div className="display" style={{ fontSize: 26 }}>No one buzzed</div>
-              <button className="btn btn-amber" style={{ marginTop: 18, fontSize: 20, padding: '14px 30px' }} onClick={next}>Next question &rarr;</button>
+              <button className="btn btn-amber" style={{ marginTop: 18, fontSize: 20, padding: '14px 30px' }} onClick={next}>{questions[idx + 1]?.round_id === currentQ?.round_id ? 'Next question \u2192' : 'Finish round'}</button>
             </div>
           )}
           {ranking.map(r => {
@@ -188,7 +248,7 @@ export default function GameMaster() {
             {phase === 'voided' ? 'Question voided' : 'Answered'}
           </div>
           <button className="btn btn-amber" style={{ marginTop: 26, fontSize: 24, padding: '18px 40px' }} onClick={next}>
-            {idx + 1 < total ? 'Next question \u2192' : 'Finish round'}
+            {questions[idx + 1]?.round_id === currentQ?.round_id ? 'Next question \u2192' : 'Finish round'}
           </button>
         </Center>
       )}
