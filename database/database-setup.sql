@@ -552,6 +552,10 @@ create policy q_read on questions for select using (true);
 -- game_control: readable (drives every client's phase/timer). Writes via RPC only.
 create policy gc_read on game_control for select using (true);
 
+-- Table-level read permission (the policies above need this to take effect).
+grant usage on schema public to anon, authenticated;
+grant select on public.questions, public.teams, public.game_control to anon, authenticated;
+
 -- buzzes + marks: NO direct client read. Rankings/scores reach GM & Admin only
 -- through SECURITY DEFINER RPCs / the service role, never raw to a player device.
 -- (No select policy = deny-all select under RLS.)
@@ -586,4 +590,7 @@ insert into teams (team_number, login_email) values
 -- ============================================================================
 -- DONE. Expect green Success. Next: set your real role passwords with —
 --   update app_config set admin_password='…', gm_password='…', player_password='…' where id;
+-- ============================================================================
+--
+-- ROUNDS + ELIMINATION: after this script, also run database/patch-v4-rounds.sql.
 -- ============================================================================

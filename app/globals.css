@@ -166,3 +166,6 @@ body::before {
   .qactions { width: 100%; justify-content: flex-end; }
   .panel { padding: 14px; }
 }
+.rcard { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: var(--panel-2); }
+.rhead { display: flex; align-items: center; gap: 8px; }
+@media (max-width: 760px) { .rhead { flex-wrap: wrap; } }
