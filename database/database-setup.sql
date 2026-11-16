@@ -95,9 +95,12 @@ insert into game_control (id) values (true);
 --      * "first press per team per question only" (spec §2.4)
 --      * "buzz and pass are mutually exclusive; first action wins" (spec §3)
 --      * PASS double-tap idempotency (spec §8) — 2nd insert violates unique -> no-op
---    client_reaction_time = the client-computed t (spec §5, deliberate trade-off).
---    server_seq = monotonic server-receipt order, kept ONLY as tie-break (§8) and
---                 as the forgery-warning signal (compare claimed t vs arrival order).
+--    client_reaction_time = the reaction time t in seconds. NOTE (v2): despite the
+--                 column name, t is now computed BY THE SERVER as
+--                 (arrival time - question_started_at). The value the phone
+--                 sends is ignored, so a wrong device clock cannot help or hurt a team.
+--                 (Column name kept so the app screens and scoring need no change.)
+--    server_seq = monotonic server-receipt order, kept ONLY as tie-break (§8).
 -- ----------------------------------------------------------------------------
 create sequence if not exists buzz_server_seq;
 create table buzzes (
@@ -155,19 +158,23 @@ end $$;
 -- The unique constraint makes double-submits a no-op (idempotent).
 create or replace function submit_buzz(p_team uuid, p_question uuid, p_client_t numeric)
 returns json language plpgsql security definer set search_path = public as $$
-declare row_id uuid;
+declare row_id uuid; started timestamptz; t numeric;
 begin
   if not _window_open(p_question) then
     return json_build_object('ok', false, 'reason', 'window_closed');
   end if;
+  -- v2: reaction time is measured on the SERVER clock, not the phone's.
+  -- p_client_t is accepted only so the app does not need to change; it is ignored.
+  select question_started_at into started from game_control where id;
+  t := greatest(round(extract(epoch from (clock_timestamp() - started))::numeric, 3), 0);
   begin
     insert into buzzes (question_id, team_id, action_type, client_reaction_time)
-    values (p_question, p_team, 'buzz', greatest(p_client_t, 0))
+    values (p_question, p_team, 'buzz', t)
     returning id into row_id;
   exception when unique_violation then
     return json_build_object('ok', false, 'reason', 'already_acted');
   end;
-  return json_build_object('ok', true, 'buzz_id', row_id);
+  return json_build_object('ok', true, 'buzz_id', row_id, 'reaction_time', t);
 end $$;
 
 -- ----- SUBMIT PASS ----------------------------------------------------------
