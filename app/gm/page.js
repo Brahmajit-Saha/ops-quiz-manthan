@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, rpc } from '../../lib/supabaseClient';
 
+const rl = r => (r ? `Round ${r.round_number}${r.name ? ' \u00b7 ' + r.name : ''}` : '');
+
 export default function GameMaster() {
   const router = useRouter();
   const [ok, setOk] = useState(false);
@@ -127,7 +129,7 @@ export default function GameMaster() {
     <div className="stage">
       <div className="brandbar">
         <span className="brand"><span className="dot" /> Game Master</span>
-        <span>{qNum ? `${curRound?.name} \u00b7 Question ${qNum} of ${total}` : ctrl?.status === 'finished' ? 'Game complete' : between ? `${curRound?.name} complete` : 'Ready to start'}</span>
+        <span>{qNum ? `${rl(curRound)} \u00b7 Question ${qNum} of ${total}` : ctrl?.status === 'finished' ? 'Game complete' : between ? `${rl(curRound)} complete` : 'Ready to start'}</span>
       </div>
 
       {/* NO CURRENT QUESTION */}
@@ -148,7 +150,7 @@ export default function GameMaster() {
       {/* ROUND COMPLETE */}
       {between && (
         <Center>
-          <div className="display" style={{ fontSize: 'clamp(30px,5vw,64px)' }}>{curRound?.name} complete</div>
+          <div className="display" style={{ fontSize: 'clamp(30px,5vw,64px)' }}>{rl(curRound)} complete</div>
           {waitingForAdmin ? (
             <p style={{ color: 'var(--muted)', margin: '14px 0 0', fontSize: 20 }}>
               Waiting for the Admin to confirm eliminations&hellip;
@@ -161,7 +163,7 @@ export default function GameMaster() {
           {nextRound ? (
             <button className="btn btn-go" style={{ marginTop: 26, fontSize: 24, padding: '18px 40px' }}
               onClick={startNextRound} disabled={waitingForAdmin}>
-              Start {nextRound.name} &rarr;
+              Start {rl(nextRound)} &rarr;
             </button>
           ) : (
             <button className="btn btn-amber" style={{ marginTop: 26, fontSize: 24, padding: '18px 40px' }}
@@ -176,7 +178,7 @@ export default function GameMaster() {
       {phase === 'idle' && ctrl?.current_question_id && (
         <Center>
           <div style={{ color: 'var(--muted)', fontSize: 20 }}>{currentQ?.segment_name}</div>
-          <div style={{ color: 'var(--muted)', fontSize: 18 }}>{curRound?.name}</div>
+          <div style={{ color: 'var(--muted)', fontSize: 18 }}>{rl(curRound)}</div>
           <div className="display" style={{ fontSize: 'clamp(40px,8vw,96px)', margin: '6px 0 4px' }}>Question {qNum}</div>
           <div style={{ color: 'var(--muted)', marginBottom: 30 }}>
             {currentQ?.time_limit_seconds}s to buzz · up to {currentQ?.base_points} pts
