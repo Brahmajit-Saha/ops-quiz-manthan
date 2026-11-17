@@ -32,6 +32,7 @@ export default function Admin() {
   const [rEdit, setREdit] = useState(EMPTY_R);
   const [loadErr, setLoadErr] = useState('');
   const [teamRows, setTeamRows] = useState([]);
+  const [exporting, setExporting] = useState(false);
   const [picked, setPicked] = useState(new Set());        // teams ticked for elimination
 
   useEffect(() => {
@@ -120,8 +121,19 @@ export default function Admin() {
       await call('void_question', { p_question: ctrl.current_question_id });
   }
   async function restart() {
-    if (confirm('RESTART THE WHOLE GAME? Wipes every score, brings back eliminated teams, and sends it back to round 1, question 1. Cannot be undone.'))
-      { await call('restart_game'); loadBoard(); loadQuestions(); }
+    if (confirm('RESTART THE WHOLE GAME?\n\nThis wipes every score, brings back eliminated teams, clears the live scorecard completely, and signs every team out (they must sign in again). It goes back to round 1, question 1. Cannot be undone.\n\nExport the scores first if you want a record.'))
+      { await call('restart_game'); setBoard([]); loadBoard(); loadQuestions(); }
+  }
+  async function exportExcel() {
+    setExporting(true);
+    try {
+      const data = await rpc('get_export_data');
+      if (!data || !data.teams) throw new Error('No data came back. Did you run the latest database patch (v6)?');
+      if (!data.teams.length) { alert('No teams have joined yet, so there is nothing to export.'); return; }
+      const { downloadExport } = await import('../../lib/exportExcel');
+      await downloadExport(data);
+    } catch (e) { alert('Could not create the Excel file: ' + (e.message || e)); }
+    finally { setExporting(false); }
   }
 
   // ----- questions -----
@@ -179,7 +191,7 @@ export default function Admin() {
 
   const roundFields = (v, set) => (
     <div className="qform-row" style={{ alignItems: 'center' }}>
-      <input className="input" placeholder="Optional title, e.g. Semi-final" value={v.name} onChange={e => set({ ...v, name: e.target.value })} />
+      <input className="input" style={{ flex: '1 1 100%' }} placeholder="Optional title, e.g. Semi-final" value={v.name} onChange={e => set({ ...v, name: e.target.value })} />
       <select className="input" style={{ width: 170 }} value={v.eliminate ? 'yes' : 'no'}
         onChange={e => set({ ...v, eliminate: e.target.value === 'yes' })}>
         <option value="no">Eliminate teams? No</option>
@@ -193,7 +205,7 @@ export default function Admin() {
   );
 
   return (
-    <div className="stage" style={{ maxWidth: 1000, margin: '0 auto', width: '100%' }}>
+    <div className="stage" style={{ maxWidth: 1500, margin: '0 auto', width: '100%' }}>
       <div className="brandbar">
         <span className="brand"><span className="dot" /> Admin control</span>
         <span>
@@ -213,6 +225,7 @@ export default function Admin() {
         </button>
         <button className="btn" onClick={resetQ} disabled={!ctrl?.current_question_id}>Reset current question</button>
         <button className="btn" onClick={voidQ} disabled={!ctrl?.current_question_id}>Void current question</button>
+        <button className="btn btn-amber" onClick={exportExcel} disabled={exporting}>{exporting ? 'Preparing\u2026' : 'Export scores (Excel)'}</button>
         <button className="btn btn-stop" onClick={restart} style={{ marginLeft: 'auto' }}>Restart game</button>
       </div>
 
@@ -255,33 +268,10 @@ export default function Admin() {
       )}
 
       <div className="admin-grid">
-        {/* SCOREBOARD */}
-        <div className="panel">
-          <h2 className="display" style={{ fontSize: 20, marginBottom: 12 }}>Live scorecard</h2>
-          {board.length === 0 && <p style={{ color: 'var(--muted)' }}>No teams have joined yet.</p>}
-          {board.map((t, i) => (
-            <div key={t.team_number} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderBottom: '1px solid var(--line)', opacity: t.eliminated ? 0.45 : 1 }}>
-              <span className="mono" style={{ width: 26, color: 'var(--muted)' }}>{t.eliminated ? '✕' : i + 1}</span>
-              <span style={{ flex: 1, fontWeight: 500 }}>
-                {t.team_name}
-                {t.eliminated && <span style={{ color: 'var(--stop)', fontSize: 12, marginLeft: 8 }}>out R{t.eliminated_in_round}</span>}
-              </span>
-              <span style={{ color: 'var(--muted)', fontSize: 13 }}>{t.passes_remaining} pass</span>
-              <span className="mono" style={{ fontSize: 20, width: 60, textAlign: 'right', color: t.total < 0 ? 'var(--stop)' : 'var(--text)' }}>{t.total}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* ROUNDS + QUESTION EDITOR */}
-        <div className="panel">
-          <h2 className="display" style={{ fontSize: 20, marginBottom: 4 }}>Rounds &amp; questions ({rounds.length} rounds, {questions.length} questions)</h2>
-          {loadErr && <p style={{ color: 'var(--stop)', fontSize: 13, marginBottom: 10 }}>Could not load the question list: {loadErr}</p>}
-          {running
-            ? <p style={{ color: 'var(--amber)', fontSize: 13, marginBottom: 10 }}>Pause the game to add, edit, or reorder rounds and questions.</p>
-            : <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 10 }}>Add, edit, and reorder freely. Timer must be 5 or 10.</p>}
-
-          {!running && (
-            <>
+        <div className="admin-side">
+        {!running && (
+          <div className="panel">
+            <h2 className="display" style={{ fontSize: 20, marginBottom: 12 }}>Build the game</h2>
               {/* add round */}
               <div style={{ display: 'grid', gap: 8, marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--line)' }}>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>Add a round</div>
@@ -290,7 +280,7 @@ export default function Admin() {
               </div>
 
               {/* add / edit question */}
-              <div style={{ display: 'grid', gap: 8, marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--line)' }}>
+              <div style={{ display: 'grid', gap: 8 }}>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{editing ? 'Edit question' : 'Add a question'}</div>
                 {!editing && (
                   <select className="input" value={draft.round_id} onChange={e => setDraft({ ...draft, round_id: e.target.value })}>
@@ -312,11 +302,37 @@ export default function Admin() {
                 <button className="btn btn-amber" onClick={saveDraft}>{editing ? 'Save changes' : 'Add question'}</button>
                 {editing && <button className="btn" onClick={() => { setEditing(null); setDraft({ ...EMPTY_Q, round_id: rounds[rounds.length - 1]?.id || '' }); }}>Cancel edit</button>}
               </div>
-            </>
-          )}
+          </div>
+        )}
+        {/* SCOREBOARD */}
+        <div className="panel">
+          <h2 className="display" style={{ fontSize: 20, marginBottom: 12 }}>Live scorecard</h2>
+          {board.length === 0 && <p style={{ color: 'var(--muted)' }}>No teams have joined yet.</p>}
+          {board.map((t, i) => (
+            <div key={t.team_number} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderBottom: '1px solid var(--line)', opacity: t.eliminated ? 0.45 : 1 }}>
+              <span className="mono" style={{ width: 26, color: 'var(--muted)' }}>{t.eliminated ? '✕' : i + 1}</span>
+              <span style={{ flex: 1, fontWeight: 500 }}>
+                {t.team_name}
+                {t.eliminated && <span style={{ color: 'var(--stop)', fontSize: 12, marginLeft: 8 }}>out R{t.eliminated_in_round}</span>}
+              </span>
+              <span style={{ color: 'var(--muted)', fontSize: 13 }}>{t.passes_remaining} pass</span>
+              <span className="mono" style={{ fontSize: 20, width: 60, textAlign: 'right', color: t.total < 0 ? 'var(--stop)' : 'var(--text)' }}>{t.total}</span>
+            </div>
+          ))}
+        </div>
+
+        </div>
+
+        {/* ROUNDS + QUESTIONS */}
+        <div className="panel admin-main">
+          <h2 className="display" style={{ fontSize: 20, marginBottom: 4 }}>Rounds &amp; questions ({rounds.length} rounds, {questions.length} questions)</h2>
+          {loadErr && <p style={{ color: 'var(--stop)', fontSize: 13, marginBottom: 10 }}>Could not load the question list: {loadErr}</p>}
+          {running
+            ? <p style={{ color: 'var(--amber)', fontSize: 13, marginBottom: 10 }}>Pause the game to add, edit, or reorder rounds and questions.</p>
+            : <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 10 }}>Add, edit, and reorder freely. Timer must be 5 or 10.</p>}
 
           {/* rounds with their questions */}
-          <div className="qlist">
+          <div className="rounds-grid">
             {rounds.map((r, ri) => (
               <div key={r.id} className="rcard">
                 {editingRound === r.id ? (
@@ -347,7 +363,7 @@ export default function Admin() {
                   </div>
                 )}
 
-                <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+                <div className="qgrid">
                   {qsIn(r.id).length === 0 && <div style={{ color: 'var(--muted)', fontSize: 13 }}>No questions yet.</div>}
                   {qsIn(r.id).map((q, i, arr) => (
                     <div key={q.id} className="qrow">

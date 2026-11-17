@@ -25,7 +25,12 @@ export default function Player() {
   }, [router]);
 
   async function refreshTeam(teamId) {
-    const { data } = await supabase.from('teams').select('passes_remaining, eliminated').eq('id', teamId).single();
+    const { data } = await supabase.from('teams').select('passes_remaining, eliminated, display_name').eq('id', teamId).single();
+    if (data && data.display_name === null) {            // the admin restarted the game: sign in again
+      try { localStorage.removeItem('ops_identity'); } catch {}
+      router.replace('/');
+      return;
+    }
     if (data) { setPassesLeft(data.passes_remaining); setEliminated(!!data.eliminated); }
   }
 
