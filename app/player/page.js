@@ -104,10 +104,12 @@ export default function Player() {
   if (!me) return null;
 
   // ---------- render states ----------
-  const waiting = !ctrl?.current_question_id || ctrl?.question_phase === 'idle' || ctrl?.status === 'setup';
+  const closed = ctrl?.question_phase && ['buzzing_closed','resolved','voided'].includes(ctrl.question_phase);
+  const timeUp = closed || (ctrl?.question_phase === 'open' && !!startedMs && remaining <= 0);
+  // once the timer ends the question disappears and everyone goes back to the "Get ready" screen
+  const waiting = !ctrl?.current_question_id || ctrl?.question_phase === 'idle' || ctrl?.status === 'setup' || timeUp;
   const betweenRounds = ctrl?.round_state === 'between';
   const gameOver = ctrl?.status === 'finished';
-  const closed = ctrl?.question_phase && ['buzzing_closed','resolved','voided'].includes(ctrl.question_phase);
 
   return (
     <div className="screen">
@@ -132,6 +134,9 @@ export default function Player() {
             <p style={{ color: 'var(--muted)', marginTop: 8 }}>
               {gameOver ? 'Thanks for playing!' : betweenRounds ? 'Waiting for the next round\u2026' : 'Waiting for the next question\u2026'}
             </p>
+            {timeUp && acted?.type === 'buzz' && (
+              <p style={{ marginTop: 12 }}>You buzzed at <b className="mono">{acted.t.toFixed(2)}s</b>. Listen for your team name.</p>
+            )}
           </div>
         )}
 
