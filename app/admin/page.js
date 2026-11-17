@@ -6,6 +6,9 @@ import { supabase, rpc } from '../../lib/supabaseClient';
 const EMPTY_Q = { text: '', base: 10, limit: 10, segment: '', round_id: '' };
 const EMPTY_R = { name: '', eliminate: false, count: 1 };
 
+// Round label: the number is automatic; the name is only an optional title.
+const rl = r => (r ? `Round ${r.round_number}${r.name ? ' \u00b7 ' + r.name : ''}` : '');
+
 // "Could not ..." pop-up for any RPC that returns {ok:false} or throws.
 async function call(fn, args) {
   try {
@@ -28,6 +31,7 @@ export default function Admin() {
   const [editingRound, setEditingRound] = useState(null); // round id being edited
   const [rEdit, setREdit] = useState(EMPTY_R);
   const [loadErr, setLoadErr] = useState('');
+  const [teamRows, setTeamRows] = useState([]);
   const [picked, setPicked] = useState(new Set());        // teams ticked for elimination
 
   useEffect(() => {
@@ -38,15 +42,17 @@ export default function Admin() {
   }, [router]);
 
   const loadQuestions = useCallback(async () => {
-    const [q, r] = await Promise.all([
+    const [q, r, t] = await Promise.all([
       supabase.from('questions').select('*').order('order_index'),
       supabase.from('rounds').select('*').order('round_number'),
+      supabase.from('teams').select('id, display_name, eliminated'),
     ]);
-    const err = q.error || r.error;
+    const err = q.error || r.error || t.error;
     if (err) { setLoadErr(err.message || String(err)); return; }   // keep the old list on error
     setLoadErr('');
     setQuestions(q.data || []);
     setRounds(r.data || []);
+    setTeamRows(t.data || []);
   }, []);
   const loadBoard = useCallback(async () => {
     try { setBoard(await rpc('get_scoreboard')); } catch {}
@@ -71,6 +77,9 @@ export default function Admin() {
   const curRound = roundOf(ctrl?.current_round_id);
   const posInRound = curQ ? qsIn(curQ.round_id).findIndex(q => q.id === curQ.id) + 1 : null;
   const between = ctrl?.round_state === 'between' && curRound;
+  const stillIn = teamRows.filter(t => !t.eliminated);
+  const joinedIn = stillIn.filter(t => t.display_name);
+  const maxElim = Math.floor((joinedIn.length || stillIn.length) / 2);
 
   // Elimination helper data: active teams, lowest totals first.
   const active = board.filter(t => !t.eliminated);
@@ -118,6 +127,8 @@ export default function Admin() {
   // ----- questions -----
   async function saveDraft() {
     if (!draft.text.trim()) return;
+    const pts = Number(draft.base);
+    if (!Number.isInteger(pts) || pts < 1 || pts > 10) { alert('Base points must be a whole number from 1 to 10.'); return; }
     if (!editing && !draft.round_id) { alert('Add a round first.'); return; }
     const done = editing
       ? await call('update_question', { p_id: editing, p_text: draft.text, p_base: +draft.base, p_limit: +draft.limit, p_segment: draft.segment })
@@ -131,17 +142,25 @@ export default function Admin() {
   async function move(q, dir) { await call('move_question', { p_id: q.id, p_dir: dir }); await loadQuestions(); }
 
   // ----- rounds -----
+  function elimProblem(v) {
+    if (!v.eliminate) return '';
+    const c = Number(v.count);
+    if (!Number.isInteger(c) || c < 1 || c > maxElim) return `Teams to eliminate must be a whole number from 1 to ${maxElim} (50% of the teams still in).`;
+    return '';
+  }
   async function addRound() {
+    const bad = elimProblem(rDraft); if (bad) { alert(bad); return; }
     const done = await call('add_round', { p_name: rDraft.name, p_eliminate: rDraft.eliminate, p_count: +rDraft.count || 0 });
     if (done) { setRDraft(EMPTY_R); await loadQuestions(); }
   }
   function editRoundRow(r) { setEditingRound(r.id); setREdit({ name: r.name, eliminate: r.eliminate_enabled, count: r.eliminate_count || 1 }); }
   async function saveRound() {
+    const bad = elimProblem(rEdit); if (bad) { alert(bad); return; }
     const done = await call('update_round', { p_id: editingRound, p_name: rEdit.name, p_eliminate: rEdit.eliminate, p_count: +rEdit.count || 0 });
     if (done) { setEditingRound(null); await loadQuestions(); }
   }
   async function delRound(r) {
-    if (confirm(`Delete "${r.name}" and ALL ${qsIn(r.id).length} of its questions?`)) { await call('delete_round', { p_id: r.id }); await loadQuestions(); }
+    if (confirm(`Delete ${rl(r)} and ALL ${qsIn(r.id).length} of its questions?`)) { await call('delete_round', { p_id: r.id }); await loadQuestions(); }
   }
   async function moveRound(r, dir) { await call('move_round', { p_id: r.id, p_dir: dir }); await loadQuestions(); }
 
@@ -160,15 +179,15 @@ export default function Admin() {
 
   const roundFields = (v, set) => (
     <div className="qform-row" style={{ alignItems: 'center' }}>
-      <input className="input" placeholder="Round name (optional)" value={v.name} onChange={e => set({ ...v, name: e.target.value })} />
+      <input className="input" placeholder="Optional title, e.g. Semi-final" value={v.name} onChange={e => set({ ...v, name: e.target.value })} />
       <select className="input" style={{ width: 170 }} value={v.eliminate ? 'yes' : 'no'}
         onChange={e => set({ ...v, eliminate: e.target.value === 'yes' })}>
         <option value="no">Eliminate teams? No</option>
         <option value="yes">Eliminate teams? Yes</option>
       </select>
       {v.eliminate && (
-        <input className="input" type="number" min="1" style={{ width: 130 }} value={v.count}
-          onChange={e => set({ ...v, count: e.target.value })} placeholder="How many?" title="Number of teams to eliminate" />
+        <input className="input" type="number" min="1" max={maxElim} step="1" style={{ width: 150 }} value={v.count}
+          onChange={e => set({ ...v, count: e.target.value })} placeholder={`How many? (max ${maxElim})`} title="Number of teams to eliminate" />
       )}
     </div>
   );
@@ -179,8 +198,8 @@ export default function Admin() {
         <span className="brand"><span className="dot" /> Admin control</span>
         <span>
           <b style={{ color: running ? 'var(--go)' : 'var(--amber)' }}>{ctrl?.status || '…'}</b>
-          {curRound && curQ ? ` · ${curRound.name} · Q${posInRound}/${qsIn(curRound.id).length} · ${ctrl?.question_phase}` : ''}
-          {between ? ` · ${curRound.name} complete` : ''}
+          {curRound && curQ ? ` · ${rl(curRound)} · Q${posInRound}/${qsIn(curRound.id).length} · ${ctrl?.question_phase}` : ''}
+          {between ? ` · ${rl(curRound)} complete` : ''}
         </span>
       </div>
 
@@ -200,7 +219,7 @@ export default function Admin() {
       {/* ROUND COMPLETE / ELIMINATION */}
       {between && (
         <div className="panel" style={{ marginBottom: 14, borderColor: 'var(--amber)', borderWidth: 2 }}>
-          <h2 className="display" style={{ fontSize: 20, marginBottom: 6 }}>{curRound.name} complete</h2>
+          <h2 className="display" style={{ fontSize: 20, marginBottom: 6 }}>{rl(curRound)} complete</h2>
           {!curRound.eliminate_enabled && (
             <p style={{ color: 'var(--muted)', fontSize: 14 }}>No elimination in this round. The Game Master can start the next round.</p>
           )}
@@ -217,7 +236,7 @@ export default function Admin() {
                 The Game Master can&rsquo;t start the next round until you confirm.
               </p>
               {tieAtCut && <p style={{ color: 'var(--amber)', fontSize: 14, marginBottom: 6 }}>Tie at the cut line &mdash; decide who goes out by changing the ticks.</p>}
-              {N >= active.length && <p style={{ color: 'var(--stop)', fontSize: 14, marginBottom: 6 }}>You are eliminating {N} but only {active.length} teams are still in. Edit the round first.</p>}
+              {N > Math.floor(active.length / 2) && <p style={{ color: 'var(--stop)', fontSize: 14, marginBottom: 6 }}>Too many: with {active.length} teams still in, at most {Math.floor(active.length / 2)} (50%) can go out. Pause the game and edit the round first.</p>}
               <div style={{ display: 'grid', gap: 6, margin: '10px 0' }}>
                 {lowFirst.map(t => (
                   <label key={t.team_id} className="qrow" style={{ cursor: 'pointer', borderColor: picked.has(t.team_id) ? 'var(--stop)' : 'var(--line)' }}>
@@ -227,7 +246,7 @@ export default function Admin() {
                   </label>
                 ))}
               </div>
-              <button className="btn btn-stop" disabled={picked.size !== N} onClick={confirmElimination}>
+              <button className="btn btn-stop" disabled={picked.size !== N || N > Math.floor(active.length / 2)} onClick={confirmElimination}>
                 Eliminate {picked.size} of {N} selected team{N === 1 ? '' : 's'}
               </button>
             </>
@@ -275,14 +294,14 @@ export default function Admin() {
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{editing ? 'Edit question' : 'Add a question'}</div>
                 {!editing && (
                   <select className="input" value={draft.round_id} onChange={e => setDraft({ ...draft, round_id: e.target.value })}>
-                    {rounds.map(r => <option key={r.id} value={r.id}>Add to: {r.name}</option>)}
+                    {rounds.map(r => <option key={r.id} value={r.id}>Add to: {rl(r)}</option>)}
                   </select>
                 )}
                 <input className="input" placeholder="Question text" value={draft.text}
                   onChange={e => setDraft({ ...draft, text: e.target.value })} />
                 <div className="qform-row">
-                  <input className="input" type="number" style={{ width: 90 }} value={draft.base}
-                    onChange={e => setDraft({ ...draft, base: e.target.value })} title="Base points" />
+                  <input className="input" type="number" min="1" max="10" step="1" style={{ width: 90 }} value={draft.base}
+                    onChange={e => setDraft({ ...draft, base: e.target.value })} title="Base points (1 to 10)" placeholder="Pts 1-10" />
                   <select className="input" style={{ width: 90 }} value={draft.limit}
                     onChange={e => setDraft({ ...draft, limit: e.target.value })}>
                     <option value={5}>5s</option><option value={10}>10s</option>
@@ -311,7 +330,7 @@ export default function Admin() {
                 ) : (
                   <div className="rhead">
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="display" style={{ fontSize: 17 }}>{r.name}</div>
+                      <div className="display" style={{ fontSize: 17 }}>{rl(r)}</div>
                       <div style={{ color: r.eliminate_enabled ? 'var(--amber)' : 'var(--muted)', fontSize: 12 }}>
                         {qsIn(r.id).length} question{qsIn(r.id).length === 1 ? '' : 's'} ·{' '}
                         {r.eliminate_enabled ? `eliminates ${r.eliminate_count} team${r.eliminate_count === 1 ? '' : 's'}${r.eliminations_applied ? ' (done)' : ''}` : 'no elimination'}
