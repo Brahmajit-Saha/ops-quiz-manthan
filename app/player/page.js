@@ -59,7 +59,7 @@ export default function Player() {
     }
     if (gc.current_question_id) {
       const { data } = await supabase.from('questions')
-        .select('id, question_text, time_limit_seconds, base_points')
+        .select('id, question_text, time_limit_seconds, base_points, options')
         .eq('id', gc.current_question_id).single();
       setQuestion(data || null);
     } else {
@@ -146,6 +146,13 @@ export default function Player() {
                 {showText ? (question?.question_text || '\u2026')
                           : 'Read the question on the main screen \u2192'}
               </div>
+              {showText && question?.options?.length === 4 && (
+                <div className="optlist" aria-label="Answer options (view only)">
+                  {question.options.map((o, i) => (
+                    <div key={i} className="optitem"><span className="optletter">{'ABCD'[i]}</span><span>{o}</span></div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* timer */}
@@ -161,12 +168,9 @@ export default function Player() {
             {/* action zone */}
             {windowOpen && !acted && (
               <>
-                <button className="btn btn-block" onClick={buzz}
-                  style={{ background: 'var(--buzz)', color: '#fff', border: 'none',
-                           fontSize: 30, fontWeight: 700, padding: '34px 0',
-                           boxShadow: '0 10px 0 var(--buzz-dk)' }}>
-                  BUZZ
-                </button>
+                <div className="buzzwrap">
+                  <button className="buzzer" onClick={buzz} aria-label="Buzz"><span>BUZZ</span></button>
+                </div>
                 <button className="btn btn-block" onClick={pass} disabled={passesLeft <= 0}>
                   Use a PASS &nbsp;
                   <span aria-hidden>{'\u25CF'.repeat(passesLeft)}{'\u25CB'.repeat(Math.max(0,3-passesLeft))}</span>

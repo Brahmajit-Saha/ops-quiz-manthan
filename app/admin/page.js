@@ -3,7 +3,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, rpc } from '../../lib/supabaseClient';
 
-const EMPTY_Q = { text: '', base: 10, limit: 10, segment: '', round_id: '' };
+const EMPTY_Q = { text: '', base: 10, limit: 10, segment: '', round_id: '', opts: ['', '', '', ''] };
+const clampLimit = v => Math.min(60, Math.max(10, Math.round((Number(v) || 10) / 10) * 10));
 const EMPTY_R = { name: '', eliminate: false, count: 1 };
 
 // Round label: the number is automatic; the name is only an optional title.
@@ -142,14 +143,16 @@ export default function Admin() {
     const pts = Number(draft.base);
     if (!Number.isInteger(pts) || pts < 1 || pts > 10) { alert('Base points must be a whole number from 1 to 10.'); return; }
     if (!editing && !draft.round_id) { alert('Add a round first.'); return; }
+    const opts = draft.opts.map(o => o.trim());
+    if (opts.some(o => !o)) { alert('Please fill in all 4 options (A, B, C and D).'); return; }
     const done = editing
-      ? await call('update_question', { p_id: editing, p_text: draft.text, p_base: +draft.base, p_limit: +draft.limit, p_segment: draft.segment })
-      : await call('add_question', { p_text: draft.text, p_base: +draft.base, p_limit: +draft.limit, p_segment: draft.segment, p_round: draft.round_id });
+      ? await call('update_question', { p_id: editing, p_text: draft.text, p_base: +draft.base, p_limit: clampLimit(draft.limit), p_segment: draft.segment, p_options: opts })
+      : await call('add_question', { p_text: draft.text, p_base: +draft.base, p_limit: clampLimit(draft.limit), p_segment: draft.segment, p_round: draft.round_id, p_options: opts });
     if (!done) return;
     setDraft({ ...EMPTY_Q, round_id: draft.round_id }); setEditing(null);
     await loadQuestions();
   }
-  function editRow(q) { setEditing(q.id); setDraft({ text: q.question_text, base: q.base_points, limit: q.time_limit_seconds, segment: q.segment_name || '', round_id: q.round_id }); }
+  function editRow(q) { setEditing(q.id); setDraft({ text: q.question_text, base: q.base_points, limit: clampLimit(q.time_limit_seconds), segment: q.segment_name || '', round_id: q.round_id, opts: (q.options && q.options.length === 4) ? q.options : ['', '', '', ''] }); }
   async function delRow(q) { if (confirm('Delete this question?')) { await call('delete_question', { p_id: q.id }); await loadQuestions(); } }
   async function move(q, dir) { await call('move_question', { p_id: q.id, p_dir: dir }); await loadQuestions(); }
 
@@ -292,12 +295,24 @@ export default function Admin() {
                 <div className="qform-row">
                   <input className="input" type="number" min="1" max="10" step="1" style={{ width: 90 }} value={draft.base}
                     onChange={e => setDraft({ ...draft, base: e.target.value })} title="Base points (1 to 10)" placeholder="Pts 1-10" />
-                  <select className="input" style={{ width: 90 }} value={draft.limit}
-                    onChange={e => setDraft({ ...draft, limit: e.target.value })}>
-                    <option value={5}>5s</option><option value={10}>10s</option>
-                  </select>
+                  <div className="stepper" title="Time to buzz (10s steps, max 60s)">
+                    <button type="button" className="btn" disabled={clampLimit(draft.limit) <= 10}
+                      onClick={() => setDraft({ ...draft, limit: clampLimit(draft.limit) - 10 })} aria-label="Less time">&minus;</button>
+                    <span className="mono">{clampLimit(draft.limit)}s</span>
+                    <button type="button" className="btn" disabled={clampLimit(draft.limit) >= 60}
+                      onClick={() => setDraft({ ...draft, limit: clampLimit(draft.limit) + 10 })} aria-label="More time">+</button>
+                  </div>
                   <input className="input" placeholder="Segment" value={draft.segment}
                     onChange={e => setDraft({ ...draft, segment: e.target.value })} />
+                </div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {['A', 'B', 'C', 'D'].map((L, i) => (
+                    <div key={L} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className="optletter">{L}</span>
+                      <input className="input" placeholder={`Option ${L}`} value={draft.opts[i]}
+                        onChange={e => setDraft({ ...draft, opts: draft.opts.map((o, k) => k === i ? e.target.value : o) })} />
+                    </div>
+                  ))}
                 </div>
                 <button className="btn btn-amber" onClick={saveDraft}>{editing ? 'Save changes' : 'Add question'}</button>
                 {editing && <button className="btn" onClick={() => { setEditing(null); setDraft({ ...EMPTY_Q, round_id: rounds[rounds.length - 1]?.id || '' }); }}>Cancel edit</button>}
@@ -373,6 +388,9 @@ export default function Admin() {
                           {q.is_placeholder && <span style={{ color: 'var(--amber)' }}>[placeholder] </span>}{q.question_text}
                         </div>
                         <div style={{ color: 'var(--muted)', fontSize: 12 }}>{q.segment_name} · {q.time_limit_seconds}s · {q.base_points}pts</div>
+                        {q.options && q.options.length === 4
+                          ? <div style={{ color: 'var(--muted)', fontSize: 12 }}>A) {q.options[0]} · B) {q.options[1]} · C) {q.options[2]} · D) {q.options[3]}</div>
+                          : <div style={{ color: 'var(--amber)', fontSize: 12 }}>Options missing &mdash; click Edit to add A&ndash;D</div>}
                       </div>
                       {!running && <div className="qactions">
                         <button className="btn" style={{ padding: '6px 9px' }} onClick={() => move(q, 'up')} disabled={i === 0} aria-label="Move up">&uarr;</button>

@@ -176,3 +176,34 @@ body::before {
 .rcard { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: var(--panel-2); }
 .rhead { display: flex; align-items: center; gap: 8px; }
 @media (max-width: 760px) { .rhead { flex-wrap: wrap; } }
+
+/* ---- admin: timer stepper & option fields ---- */
+.stepper { display: inline-flex; align-items: center; gap: 6px; }
+.stepper .btn { padding: 8px 13px; font-size: 18px; line-height: 1; }
+.stepper .mono { min-width: 46px; text-align: center; font-weight: 700; }
+.optletter { display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 28px; height: 28px; border-radius: 50%; background: rgba(143,107,255,.18);
+  border: 1px solid var(--line); font-weight: 700; font-size: 13px; }
+
+/* ---- player: read-only options ---- */
+.optlist { display: grid; gap: 8px; margin-top: 14px; }
+.optitem { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--line); background: rgba(255,255,255,.03); font-size: 17px;
+  pointer-events: none; user-select: none; }
+
+/* ---- player: round red animated buzzer ---- */
+.buzzwrap { display: flex; justify-content: center; padding: 14px 0 22px; }
+.buzzer { position: relative; width: min(62vw, 230px); height: min(62vw, 230px); border-radius: 50%;
+  border: none; cursor: pointer; color: #fff; font: inherit; font-weight: 800; font-size: 34px; letter-spacing: .06em;
+  background: radial-gradient(circle at 35% 28%, #ff7b86 0%, #e5253a 45%, #a80f22 100%);
+  box-shadow: 0 12px 0 #6e0715, 0 18px 30px rgba(0,0,0,.45), inset 0 -6px 14px rgba(0,0,0,.25), inset 0 6px 12px rgba(255,255,255,.3);
+  text-shadow: 0 2px 4px rgba(0,0,0,.35);
+  transition: transform .08s ease, box-shadow .08s ease;
+  animation: buzzpulse 1.4s ease-in-out infinite; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.buzzer:active { transform: translateY(10px); box-shadow: 0 2px 0 #6e0715, 0 6px 12px rgba(0,0,0,.45), inset 0 -4px 10px rgba(0,0,0,.3);
+  animation: none; }
+@keyframes buzzpulse {
+  0%, 100% { filter: brightness(1);    box-shadow: 0 12px 0 #6e0715, 0 18px 30px rgba(0,0,0,.45), 0 0 0 0 rgba(255,59,80,.55), inset 0 -6px 14px rgba(0,0,0,.25), inset 0 6px 12px rgba(255,255,255,.3); }
+  50%      { filter: brightness(1.12); box-shadow: 0 12px 0 #6e0715, 0 18px 30px rgba(0,0,0,.45), 0 0 0 22px rgba(255,59,80,0), inset 0 -6px 14px rgba(0,0,0,.25), inset 0 6px 12px rgba(255,255,255,.3); }
+}
+@media (prefers-reduced-motion: reduce) { .buzzer { animation: none; } }
