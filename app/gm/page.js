@@ -14,6 +14,7 @@ export default function GameMaster() {
   const [currentQ, setCurrentQ] = useState(null);
   const [ranking, setRanking] = useState([]);
   const [now, setNow] = useState(Date.now());
+  const [showBoard, setShowBoard] = useState(false);
   const closedFor = useRef(null);                    // qid we've already auto-closed
 
   useEffect(() => {
@@ -127,6 +128,12 @@ export default function GameMaster() {
 
   return (
     <div className="stage">
+      {!showBoard && (
+        <button className="sb-fab" onClick={() => setShowBoard(true)} aria-label="Show scoreboard">
+          <span className="sb-fab-ico" aria-hidden>&#127942;</span><span>Scoreboard</span>
+        </button>
+      )}
+      {showBoard && <ScoreboardOverlay onClose={() => setShowBoard(false)} />}
       <div className="brandbar">
         <span className="brand"><span className="dot" /> Game Master</span>
         <span>{qNum ? `${rl(curRound)} \u00b7 Question ${qNum} of ${total}` : ctrl?.status === 'finished' ? 'Game complete' : between ? `${rl(curRound)} complete` : 'Ready to start'}</span>
@@ -260,4 +267,86 @@ export default function GameMaster() {
 
 function Center({ children }) {
   return <div className="grow center" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>{children}</div>;
+}
+
+
+// ---------- full-screen animated scoreboard (for the room / projector) ----------
+const ROW_H = 74;
+
+function CountUp({ value }) {
+  const [shown, setShown] = useState(value);
+  const from = useRef(value);
+  useEffect(() => {
+    const start = performance.now(), a = from.current, b = value;
+    if (a === b) return;
+    let raf;
+    const tick = t => {
+      const k = Math.min(1, (t - start) / 800), e = 1 - Math.pow(1 - k, 3);
+      setShown(Math.round(a + (b - a) * e));
+      if (k < 1) raf = requestAnimationFrame(tick); else from.current = b;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); from.current = b; };
+  }, [value]);
+  return <>{shown}</>;
+}
+
+function ScoreboardOverlay({ onClose }) {
+  const [rows, setRows] = useState(null);
+  const [shownAt, setShownAt] = useState(Date.now());
+
+  useEffect(() => {
+    let alive = true;
+    async function pull() {
+      try { const d = await rpc('get_scoreboard'); if (alive && Array.isArray(d)) { setRows(d); setShownAt(Date.now()); } } catch {}
+    }
+    pull();
+    const t = setInterval(pull, 2500);
+    const key = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', key);
+    return () => { alive = false; clearInterval(t); window.removeEventListener('keydown', key); };
+  }, [onClose]);
+
+  const sorted = (rows || []).slice().sort((a, b) =>
+    (a.eliminated === b.eliminated ? 0 : a.eliminated ? 1 : -1) || b.total - a.total || a.team_number - b.team_number);
+  let lastScore = null, lastRank = 0;
+  const ranked = sorted.map((t, i) => {
+    if (t.eliminated) return { ...t, rank: null };
+    if (t.total !== lastScore) { lastRank = i + 1; lastScore = t.total; }
+    return { ...t, rank: lastRank };
+  });
+  const max = Math.max(1, ...ranked.filter(t => !t.eliminated).map(t => t.total));
+
+  return (
+    <div className="sb-overlay" role="dialog" aria-label="Scoreboard">
+      <div className="sb-glow" aria-hidden />
+      <button className="sb-close" onClick={onClose} aria-label="Close scoreboard">&times;</button>
+      <div className="sb-head">
+        <div className="sb-kicker"><span className="sb-live" /> LIVE</div>
+        <h1 className="display sb-title">Scoreboard</h1>
+      </div>
+      <div className="sb-body">
+        {rows && ranked.length === 0 && <p className="sb-empty">No teams have joined yet.</p>}
+        {!rows && <p className="sb-empty">Loading&hellip;</p>}
+        <div className="sb-list" style={{ height: ranked.length * ROW_H }}>
+          {ranked.map((t, i) => {
+            const pct = t.eliminated ? 0 : Math.max(0, t.total) / max * 100;
+            return (
+              <div key={t.team_id || t.team_number} className={`sb-row ${t.rank ? 'r' + Math.min(t.rank, 4) : ''} ${t.eliminated ? 'out' : ''}`}
+                style={{ transform: `translateY(${i * ROW_H}px)`, animationDelay: `${i * 70}ms`, height: ROW_H - 10 }}>
+                <div className="sb-bar" style={{ width: pct + '%' }} />
+                <div className="sb-rank">{t.eliminated ? '\u2715' : t.rank}</div>
+                <div className="sb-name">{t.team_name}
+                  {t.eliminated && <span className="sb-tag">out in R{t.eliminated_in_round}</span>}
+                </div>
+                <div className="sb-passes" title="PASS cards left">{'\u25CF'.repeat(t.passes_remaining)}{'\u25CB'.repeat(Math.max(0, 3 - t.passes_remaining))}</div>
+                <div className={`sb-score mono ${t.total < 0 ? 'neg' : ''}`}><CountUp value={t.total} /></div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="sb-foot">Press Esc or &times; to go back</div>
+    </div>
+  );
 }
