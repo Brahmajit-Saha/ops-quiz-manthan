@@ -42,24 +42,31 @@ export default function Player() {
       if (active && data) applyCtrl(data);
     }
     pull();
+    const poll = setInterval(pull, 3000);          // safety net if a live update is missed
     const ch = supabase.channel('gc-player')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'game_control' },
         payload => applyCtrl(payload.new))
       .subscribe();
-    return () => { active = false; supabase.removeChannel(ch); };
+    return () => { active = false; clearInterval(poll); supabase.removeChannel(ch); };
   }, []);
 
+  const lastSig = useRef('');
   async function applyCtrl(gc) {
+    const sig = [gc.updated_at, gc.question_phase, gc.current_question_id, gc.question_started_at,
+                 gc.status, gc.round_state, gc.show_questions_to_players].join('|');
+    if (sig === lastSig.current) return;             // nothing changed (live update + poll overlap)
+    lastSig.current = sig;
     setCtrl(gc);
     try { const raw = localStorage.getItem('ops_identity'); if (raw) refreshTeam(JSON.parse(raw).team_id); } catch {}
-    // new question? reset our per-question action state and fetch text
-    if (gc.current_question_id && gc.current_question_id !== actedForQ.current?.qid) {
-      actedForQ.current = { qid: gc.current_question_id };
+    // A new question, a re-opened question (admin Reset) or a new start time = a fresh chance to buzz
+    const key = gc.current_question_id + '|' + gc.question_started_at;
+    if (actedForQ.current?.key !== key) {
+      actedForQ.current = { key };
       setActed(null);
     }
     if (gc.current_question_id) {
       const { data } = await supabase.from('questions')
-        .select('id, question_text, time_limit_seconds, base_points, options')
+        .select('id, question_text, time_limit_seconds, base_points, options, segment_name')
         .eq('id', gc.current_question_id).single();
       setQuestion(data || null);
     } else {
@@ -86,6 +93,7 @@ export default function Player() {
     try {
       const res = await rpc('submit_buzz', { p_team: me.team_id, p_question: question.id, p_client_t: t });
       if (!res?.ok && res?.reason === 'window_closed') setActed({ type: 'late' });
+      else if (!res?.ok && res?.reason === 'already_acted') setActed({ type: 'already' });
       else if (res?.ok && res.reaction_time != null) setActed({ type: 'buzz', t: Number(res.reaction_time) }); // show the server-measured time
     } catch { /* keep optimistic lock; server is source of truth */ }
   }
@@ -97,6 +105,7 @@ export default function Player() {
       const res = await rpc('submit_pass', { p_team: me.team_id, p_question: question.id });
       if (res?.ok) setPassesLeft(res.passes_remaining);
       else if (res?.reason === 'window_closed') setActed({ type: 'late' });
+      else if (res?.reason === 'already_acted') setActed({ type: 'already' });
       else if (res?.reason === 'no_passes_left') { setPassesLeft(0); setActed(null); }
     } catch { /* keep optimistic */ }
   }
@@ -196,6 +205,12 @@ export default function Player() {
               <div className="panel center">
                 <div className="display" style={{ fontSize: 22 }}>Passed</div>
                 <p style={{ color: 'var(--muted)', marginTop: 6 }}>{passesLeft} PASS card{passesLeft===1?'':'s'} left.</p>
+              </div>
+            )}
+            {acted?.type === 'already' && (
+              <div className="panel center" style={{ borderColor: 'var(--buzz)' }}>
+                <div className="display" style={{ fontSize: 22, color: 'var(--buzz)' }}>Already registered</div>
+                <p style={{ color: 'var(--muted)', marginTop: 6 }}>Your team already buzzed or passed on this question. Listen for your team name.</p>
               </div>
             )}
             {acted?.type === 'late' && (
